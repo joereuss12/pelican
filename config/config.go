@@ -543,7 +543,7 @@ func InitConfig() {
 	}
 	// 2) Set up osdf.yaml (if needed)
 	prefix := GetPreferredPrefix()
-	if prefix == "OSDF" {
+	if prefix == "OSDF" || prefix == "STASH" {
 		err := viper.MergeConfig(strings.NewReader(osdfDefaultsYaml))
 		if err != nil {
 			cobra.CheckErr(err)
