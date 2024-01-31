@@ -86,9 +86,11 @@ func TestStashPluginMain(t *testing.T) {
 	err := cmd.Run()
 	assert.Error(t, err, stderr.String())
 
-	// changing output for "\\" since in windows there are excess "\" printed in debug logs
-	output := strings.Replace(stderr.String(), "\\\\", "\\", -1)
+	// Keeping this for future reference when we write a test with a test federation:
+	// // changing output for "\\" since in windows there are excess "\" printed in debug logs
+	// output := strings.Replace(stderr.String(), "\\\\", "\\", -1)
+	// fmt.Println(output)
 
-	expectedOutput := "Downloading: pelican://pelican.example.com/osgconnect/public/osg/testfile.txt to " + tempDir
-	assert.Contains(t, output, expectedOutput)
+	// expectedOutput := "Downloading: pelican://pelican.example.com/osgconnect/public/osg/testfile.txt to " + tempDir
+	// assert.Contains(t, output, expectedOutput)
 }

@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -49,6 +50,8 @@ var (
 		Use:   "plugin",
 		Short: "Plugin management for HTCSS",
 	}
+
+	debug = false
 )
 
 type Transfer struct {
@@ -71,13 +74,6 @@ func init() {
 }
 
 func stashPluginMain(args []string) {
-	config.InitConfig()
-	err := config.InitClient()
-	if err != nil {
-		log.Errorln(err)
-		os.Exit(1)
-	}
-
 	// Parse command line arguments
 	var upload bool = false
 	// Set the options
@@ -120,6 +116,7 @@ func stashPluginMain(args []string) {
 			log.Debugln("Outfile:", outfile)
 		} else if args[0] == "-d" {
 			config.SetLogging(log.DebugLevel)
+			debug = true
 		} else if args[0] == "-get-caches" {
 			if len(args) < 2 {
 				log.Errorln("-get-caches requires an argument")
@@ -137,24 +134,6 @@ func stashPluginMain(args []string) {
 		}
 		// Pop off the args
 		args = args[1:]
-	}
-
-	if getCaches {
-		urls, err := client.GetCacheHostnames(testCachePath)
-		if err != nil {
-			log.Errorln("Failed to get cache URLs:", err)
-			os.Exit(1)
-		}
-
-		cachesToTry := client.CachesToTry
-		if cachesToTry > len(urls) {
-			cachesToTry = len(urls)
-		}
-
-		for _, url := range urls[:cachesToTry] {
-			fmt.Println(url)
-		}
-		os.Exit(0)
 	}
 
 	var source []string
@@ -184,8 +163,43 @@ func stashPluginMain(args []string) {
 		source = args[:len(args)-1]
 		dest = args[len(args)-1]
 		for _, src := range source {
+			src = strings.Replace(src, "///", "//", 1) //cut any extra "/" so we can url parse and get host
+			srcUrl, _ := url.Parse(src)
+			if srcUrl.Host != "" {
+				viper.Set("Federation.DiscoveryUrl", srcUrl.Host)
+			}
 			transfers = append(transfers, Transfer{url: src, localFile: dest})
 		}
+	}
+
+	// init our configs
+	config.InitConfig()
+	err := config.InitClient()
+	if err != nil {
+		log.Errorln(err)
+		os.Exit(1)
+	}
+	// Reset debug if flag was passed
+	if debug {
+		config.SetLogging(log.DebugLevel)
+	}
+
+	if getCaches {
+		urls, err := client.GetCacheHostnames(testCachePath)
+		if err != nil {
+			log.Errorln("Failed to get cache URLs:", err)
+			os.Exit(1)
+		}
+
+		cachesToTry := client.CachesToTry
+		if cachesToTry > len(urls) {
+			cachesToTry = len(urls)
+		}
+
+		for _, url := range urls[:cachesToTry] {
+			fmt.Println(url)
+		}
+		os.Exit(0)
 	}
 
 	// NOTE: HTCondor 23.3.0 and before would reuse the outfile names for multiple
@@ -412,15 +426,22 @@ func readMultiTransfers(stdin bufio.Reader) (transfers []Transfer, err error) {
 		return nil, errors.New("No transfers found")
 	}
 	for _, ad := range ads {
-		url, err := ad.Get("Url")
+		adUrl, err := ad.Get("Url")
 		if err != nil {
 			return nil, err
+		}
+		adUrlStr := adUrl.(string)
+		adUrlStr = strings.Replace(adUrlStr, "///", "//", 1) //cut any extra "/" so we can url parse and get host
+
+		srcUrl, _ := url.Parse(adUrlStr)
+		if srcUrl.Host != "" {
+			viper.Set("Federation.DiscoveryUrl", srcUrl.Host)
 		}
 		destination, err := ad.Get("LocalFileName")
 		if err != nil {
 			return nil, err
 		}
-		transfers = append(transfers, Transfer{url: url.(string), localFile: destination.(string)})
+		transfers = append(transfers, Transfer{url: adUrlStr, localFile: destination.(string)})
 	}
 
 	return transfers, nil
